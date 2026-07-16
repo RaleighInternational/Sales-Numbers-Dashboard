@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raleigh Sales Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --dark-green: #085041;
+    --teal: #1D9E75;
+    --teal-light: #e8f7f2;
+    --teal-mid: #b2e0d0;
+    --amber: #f5a623;
+    --red: #e74c3c;
+    --grey-bg: #f4f6f5;
+    --grey-border: #d0dcd8;
+    --white: #ffffff;
+    --text-dark: #1a2e28;
+    --text-mid: #4a6b62;
+    --text-light: #7a9b93;
+    --row-green: #ecf8f3;
+    --row-zero: #fafafa;
+    --total-bg: #fff8e6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--grey-bg); color: var(--text-dark); min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: var(--dark-green);
+    color: white;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.5px; }
+  header span { font-size: 0.8rem; opacity: 0.7; }
+
+  /* MAIN LAYOUT */
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    background: white;
+    border: 2px dashed var(--teal);
+    border-radius: 12px;
+    padding: 36px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 28px;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { background: var(--teal-light); border-color: var(--dark-green); }
+  .upload-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .upload-zone h2 { color: var(--dark-green); font-size: 1.1rem; margin-bottom: 6px; }
+  .upload-zone p { color: var(--text-mid); font-size: 0.85rem; }
+  .upload-zone input[type="file"] { display: none; }
+
+  /* STATUS BAR */
+  .status-bar {
+    background: var(--teal);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+  }
+  .status-bar.show { display: flex; }
+  .status-bar.error { background: var(--red); }
+  .status-bar.warning { background: var(--amber); color: var(--text-dark); }
+
+  /* DISCREPANCY BOX */
+  .discrepancy-box {
+    background: #fff8e6;
+    border: 1.5px solid var(--amber);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: none;
+  }
+  .discrepancy-box.show { display: block; }
+  .discrepancy-box h3 { color: #b7760a; font-size: 0.95rem; margin-bottom: 10px; }
+  .discrepancy-item { font-size: 0.83rem; color: var(--text-dark); margin-bottom: 6px; padding-left: 12px; border-left: 3px solid var(--amber); }
+  .discrepancy-item strong { display: block; color: #8a5a00; }
+
+  /* NATIONALS EDITOR */
+  .nationals-panel {
+    background: white;
+    border-radius: 12px;
+    border: 1.5px solid var(--grey-border);
+    margin-bottom: 24px;
+    overflow: hidden;
+    display: none;
+  }
+  .nationals-panel.show { display: block; }
+  .panel-header {
+    background: var(--dark-green);
+    color: white;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+  .panel-header h3 { font-size: 0.95rem; }
+  .panel-header .toggle { font-size: 1.1rem; transition: transform 0.2s; }
+  .panel-header.open .toggle { transform: rotate(180deg); }
+  .panel-body { padding: 16px 20px; display: none; }
+  .panel-body.open { display: block; }
+  .nationals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .national-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--teal-light); border-radius: 8px; padding: 8px 12px;
+  }
+  .national-row label { font-size: 0.82rem; color: var(--text-dark); flex: 1; }
+  .national-row input {
+    width: 52px; text-align: center; border: 1.5px solid var(--teal-mid);
+    border-radius: 6px; padding: 4px 6px; font-size: 0.9rem; font-weight: 700;
+    color: var(--dark-green); background: white;
+  }
+  .national-row input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(29,158,117,0.2); }
+  .nationals-add { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .nationals-add select, .nationals-add input {
+    border: 1.5px solid var(--grey-border); border-radius: 6px; padding: 6px 10px; font-size: 0.83rem;
+    background: white; color: var(--text-dark);
+  }
+  .btn { padding: 8px 16px; border: none; border-radius: 7px; cursor: pointer; font-size: 0.83rem; font-weight: 600; transition: all 0.15s; }
+  .btn-teal { background: var(--teal); color: white; }
+  .btn-teal:hover { background: var(--dark-green); }
+  .btn-red { background: #fdecea; color: var(--red); border: 1px solid #f5c0bb; }
+  .btn-red:hover { background: var(--red); color: white; }
+  .btn-outline { background: white; color: var(--dark-green); border: 1.5px solid var(--dark-green); }
+  .btn-outline:hover { background: var(--dark-green); color: white; }
+
+  /* YEAR TABS */
+  .year-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .year-tab {
+    padding: 9px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+    border: 2px solid var(--grey-border); background: white; color: var(--text-mid); transition: all 0.15s;
+  }
+  .year-tab.active { background: var(--dark-green); color: white; border-color: var(--dark-green); }
+
+  /* ACTION BAR */
+  .action-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+  .action-bar .summary { color: var(--text-mid); font-size: 0.85rem; margin-left: auto; }
+
+  /* RESULTS TABLE */
+  .results-section { background: white; border-radius: 12px; border: 1.5px solid var(--grey-border); overflow: hidden; }
+  .cycle-block { margin-bottom: 0; }
+  .cycle-header {
+    background: var(--dark-green); color: white;
+    padding: 11px 20px; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .dest-header {
+    background: #2E6E8E; color: white;
+    padding: 8px 20px; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: #daeef7; color: var(--dark-green); font-size: 0.8rem; font-weight: 700;
+    padding: 8px 16px; text-align: left; border-bottom: 1.5px solid var(--grey-border);
+  }
+  thead th:not(:first-child) { text-align: center; }
+  tbody tr:nth-child(even) td { background: var(--row-zero); }
+  tbody tr:nth-child(odd) td { background: white; }
+  tbody tr.has-count td { background: var(--row-green); }
+  tbody td { padding: 7px 16px; font-size: 0.83rem; border-bottom: 1px solid #eef2f1; }
+  tbody td:not(:first-child) { text-align: center; }
+  tbody td:not(:first-child) { font-weight: 600; }
+  .total-row td { background: var(--total-bg) !important; font-weight: 700; font-size: 0.85rem; border-top: 2px solid #e8d5a0; }
+  .zero-val { color: #ccc; }
+  .net-val { color: var(--dark-green); }
+
+  /* COPY BUTTON per table */
+  .copy-table-btn {
+    display: block; width: 100%; text-align: right;
+    padding: 6px 16px; background: var(--teal-light); border: none;
+    font-size: 0.78rem; color: var(--teal); cursor: pointer; font-weight: 600;
+    border-top: 1px solid var(--teal-mid);
+    transition: background 0.15s;
+  }
+  .copy-table-btn:hover { background: var(--teal-mid); }
+
+  /* EMPTY STATE */
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-light); }
+  .empty-state .big { font-size: 3rem; margin-bottom: 12px; }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--dark-green); color: white;
+    padding: 12px 22px; border-radius: 10px; font-size: 0.88rem; font-weight: 600;
+    opacity: 0; transform: translateY(10px); transition: all 0.25s; pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 600px) {
+    header { padding: 14px 16px; }
+    main { padding: 16px 12px 40px; }
+    .upload-zone { padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌿 Raleigh International — Sales Tracker</h1>
+  <span id="last-updated"></span>
+</header>
+
+<main>
+  <!-- UPLOAD -->
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="icon">📊</div>
+    <h2>Drop your passenger registry here, or click to browse</h2>
+    <p>Accepts .xlsx files exported from FileMaker · 2026 & 2027 data · 2 & 3 week venturers are ignored automatically</p>
+    <input type="file" id="file-input" accept=".xlsx" onchange="handleFile(this.files[0])">
+  </div>
+
+  <!-- STATUS -->
+  <div class="status-bar" id="status-bar"></div>
+
+  <!-- DISCREPANCIES -->
+  <div class="discrepancy-box" id="discrepancy-box">
+    <h3>⚠️ Data discrepancies found — please check these rows in your source file</h3>
+    <div id="discrepancy-list"></div>
+  </div>
+
+  <!-- NATIONALS PANEL -->
+  <div class="nationals-panel" id="nationals-panel">
+    <div class="panel-header" id="nationals-toggle" onclick="toggleNationals()">
+      <h3>✏️ Edit Nationals</h3>
+      <span class="toggle">▼</span>
+    </div>
+    <div class="panel-body" id="nationals-body">
+      <p style="font-size:0.82rem;color:var(--text-mid);margin-bottom:14px;">
+        Nationals are subtracted from venturer totals to give the Net count. Edit numbers directly or add new entries below.
+      </p>
+      <div class="nationals-grid" id="nationals-grid"></div>
+      <div class="nationals-add" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--grey-border);">
+        <span style="font-size:0.82rem;font-weight:600;color:var(--text-mid);">Add national:</span>
+        <select id="add-year"><option value="2026">2026</option><option value="2027">2027</option></select>
+        <select id="add-cycle"><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option></select>
+        <select id="add-dest"><option>Costa Rica</option><option>South Africa</option><option>Borneo</option></select>
+        <select id="add-wt"><option value="10w">10 Weeks</option><option value="7A">7A</option><option value="7B">7B</option><option value="5A">5A</option><option value="5B">5B</option><option value="4A">4A</option><option value="4B">4B</option></select>
+        <input type="number" id="add-count" value="1" min="0" style="width:60px;">
+        <button class="btn btn-teal" onclick="addNational()">+ Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- YEAR TABS + ACTIONS -->
+  <div id="controls-row" style="display:none;">
+    <div class="year-tabs">
+      <button class="year-tab active" onclick="switchYear(2026, this)">2026</button>
+      <button class="year-tab" onclick="switchYear(2027, this)">2027</button>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-teal" onclick="downloadExcel()">⬇ Download Excel</button>
+      <button class="btn btn-outline" onclick="copyAllTables()">📋 Copy all to clipboard</button>
+      <span class="summary" id="summary-text"></span>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results-2026" class="results-section"></div>
+  <div id="results-2027" class="results-section" style="display:none;"></div>
+
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="empty-state">
+    <div class="big">📂</div>
+    <p>Upload a passenger registry to see your sales summary</p>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+let NATIONALS = {
+  '2026|1|Borneo|10w': 1,
+  '2026|1|Borneo|5A': 1,
+  '2026|1|South Africa|10w': 2,
+  '2026|1|Costa Rica|10w': 3,
+  '2026|2|Costa Rica|10w': 1,
+};
+
+const CYCLE_BOUNDS = {
+  2026: {
+    1: {
+      'Costa Rica':   { '10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260317] },
+      'South Africa': { '10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260318] },
+      'Borneo':       { '10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260319] },
+    },
+    2: {
+      'Costa Rica':   { '10w':[20260629,20260903],'7A':[20260629,20260814],'7B':[20260719,20260903],'5A':[20260629,20260803],'5B':[20260719,20260823],'4A':[20260629,20260724],'4B':[20260719,20260814] },
+      'South Africa': { '10w':[20260629,20260903],'7A':[20260629,20260814],'7B':[20260719,20260903],'5A':[20260629,20260803],'5B':[20260719,20260824],'4A':[20260629,20260724],'4B':[20260719,20260814] },
+    },
+    3: {
+      'Costa Rica':   { '10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261117],'4A':[20261013,20261109] },
+      'South Africa': { '10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261118],'4A':[20261013,20261107] },
+      'Borneo':       { '10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261119],'4A':[20261013,20261107] },
+    },
+  },
+  2027: {
+    1: {
+      'Costa Rica':   { '10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270315],'4A':[20270208,20270307] },
+      'South Africa': { '10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270316],'4A':[20270208,20270305] },
+      'Borneo':       { '10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270315],'4A':[20270208,20270305] },
+    },
+    2: {
+      'Costa Rica':   { '10w':[20270628,20270902],'7A':[20270628,20270813],'7B':[20270718,20270902],'5A':[20270628,20270802],'5B':[20270718,20270823],'4A':[20270628,20270725],'4B':[20270718,20270813] },
+      'South Africa': { '10w':[20270628,20270902],'7A':[20270628,20270813],'7B':[20270718,20270902],'5A':[20270628,20270803],'5B':[20270718,20270824],'4A':[20270628,20270723],'4B':[20270718,20270813] },
+    },
+    3: {
+      'Costa Rica':   { '10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271116],'4A':[20271012,20271108] },
+      'South Africa': { '10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271117],'4A':[20271012,20271106] },
+      'Borneo':       { '10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271116],'4A':[20271012,20271106] },
+    },
+  },
+};
+
+const WT_BY_CYCLE = {
+  '2026|1':['10w','7A','7B','5A'],
+  '2026|2':['10w','7A','7B','5A','5B','4A','4B'],
+  '2026|3':['10w','7A','7B','5A','4A'],
+  '2027|1':['10w','7A','7B','5A','4A'],
+  '2027|2':['10w','7A','7B','5A','5B','4A','4B'],
+  '2027|3':['10w','7A','7B','5A','4A'],
+};
+
+const DEST_ORDER = ['Costa Rica','South Africa','Borneo'];
+const LABEL_MAP = {'10w':'10 Weeks','7A':'7 Weeks – A','7B':'7 Weeks – B','5A':'5 Weeks – A','5B':'5 Weeks – B','4A':'4 Weeks – A','4B':'4 Weeks – B'};
+const CYCLE_LABELS = {1:'Cycle 1 — February to April',2:'Cycle 2 — June to September',3:'Cycle 3 — October to December'};
+
+let currentCounts = {};
+let activeYear = 2026;
+
+// ─── DATE UTILS ───────────────────────────────────────────────────────────────
+function excelDateToYMD(serial) {
+  if (!serial) return null;
+  if (serial instanceof Date) return serial;
+  const d = new Date(Math.round((serial - 25569) * 86400 * 1000));
+  return d;
+}
+function toNum(d) {
+  if (!d) return 0;
+  const dt = d instanceof Date ? d : new Date(d);
+  return dt.getFullYear()*10000 + (dt.getMonth()+1)*100 + dt.getDate();
+}
+function absDiff(a,b){ return Math.abs(a-b); }
+function numToStr(n){ const y=Math.floor(n/10000),m=Math.floor((n%10000)/100),d=n%100; return `${String(d).padStart(2,'0')} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]} ${y}`; }
+
+// ─── WEEK TYPE IDENTIFICATION ──────────────────────────────────────────────────
+function identifyWeekType(startNum, endNum, year, cycle, dest) {
+  const bounds = (CYCLE_BOUNDS[year]||{})[cycle]||{};
+  const destBounds = bounds[dest];
+  if (!destBounds) return null;
+  let best = null, bestScore = 999;
+  for (const [wt, [s,e]] of Object.entries(destBounds)) {
+    const sd = absDiff(startNum, s), ed = absDiff(endNum, e);
+    if (sd <= 4 && ed <= 4) {
+      const score = sd + ed;
+      if (score < bestScore) { bestScore = score; best = wt; }
+    }
+  }
+  if (!best) {
+    for (const [wt, [s,e]] of Object.entries(destBounds)) {
+      const ed = absDiff(endNum, e);
+      if (ed <= 4 && ed < bestScore) { bestScore = ed; best = wt; }
+    }
+  }
+  return best;
+}
+
+// ─── DISCREPANCY CHECK ────────────────────────────────────────────────────────
+function checkDiscrepancies(rows) {
+  const issues = [];
+  rows.forEach((row, i) => {
+    const probs = [];
+    const name = String(row.product||'').toLowerCase();
+    const dest = String(row.dest||'');
+    const s = row.startDate;
+    if (!s) return;
+    const yr = s.getFullYear();
+    const m = s.getMonth()+1;
+    const cycle = m<=5?1:m<=9?2:3;
+
+    // Label year from product name
+    const lyMatch = String(row.product||'').match(/20(2[4-9])/);
+    const labelYear = lyMatch ? parseInt('20'+lyMatch[1]) : null;
+
+    // Label cycle from SKU
+    const skuMatch = String(row.sku||'').match(/Cycle\s*(\d)/i);
+    const labelCycle = skuMatch ? parseInt(skuMatch[1]) : null;
+
+    if (labelCycle && labelCycle !== cycle)
+      probs.push(`Cycle mismatch — name says C${labelCycle}, start date says C${cycle}`);
+    if (labelYear && labelYear !== yr)
+      probs.push(`Year mismatch — name says ${labelYear}, start date says ${yr}`);
+    if (dest.toLowerCase().includes('borneo') && cycle === 2)
+      probs.push(`Borneo has no Cycle 2 — start date falls in Jun–Sep window`);
+
+    let destInName = '';
+    if (name.includes('costa rica')) destInName = 'Costa Rica';
+    else if (name.includes('south africa')) destInName = 'South Africa';
+    else if (name.includes('borneo')) destInName = 'Borneo';
+    if (destInName && destInName !== dest)
+      probs.push(`Destination mismatch — name says '${destInName}', field says '${dest}'`);
+
+    if (probs.length) issues.push({ rowNum: i+2, product: row.product, dest, startStr: s.toLocaleDateString('en-GB'), probs });
+  });
+  return issues;
+}
+
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
+
+      // Auto-detect columns
+      if (data.length === 0) { showStatus('No data found in file.', 'error'); return; }
+      const cols = Object.keys(data[0]);
+      const findCol = (keys) => cols.find(c => keys.some(k => c.toLowerCase().includes(k.toLowerCase()))) || null;
+
+      const productCol = findCol(['Product_Name']);
+      const skuCol     = findCol(['Grouping_SKU']);
+      const destCol    = findCol(['Destination_Name']);
+      const startCol   = findCol(['Date_Start']);
+      const endCol     = findCol(['Date_End']);
+
+      if (!startCol || !endCol) { showStatus('Could not find Start/End date columns. Check the file.', 'error'); return; }
+
+      // Parse rows
+      const rows = data.map(r => {
+        const rawStart = r[startCol], rawEnd = r[endCol];
+        const s = rawStart ? new Date(rawStart) : null;
+        const en = rawEnd   ? new Date(rawEnd)   : null;
+        return {
+          product: r[productCol]||'', sku: r[skuCol]||'',
+          dest: r[destCol]||'', startDate: s, endDate: en,
+          dur: (s && en) ? Math.round((en-s)/(1000*60*60*24)) : null,
+        };
+      });
+
+      // Count
+      const counts = {};
+      rows.forEach(row => {
+        const s = row.startDate, en = row.endDate;
+        if (!s || !en) return;
+        const yr = s.getFullYear();
+        if (yr !== 2026 && yr !== 2027) return;
+        if (!row.dest) return;
+        const dur = row.dur;
+        if (dur === null || dur < 24) return; // ignore 2/3 weekers
+        const m = s.getMonth()+1;
+        const cycle = m<=5?1:m<=9?2:3;
+        const wt = identifyWeekType(toNum(s), toNum(en), yr, cycle, row.dest);
+        if (!wt) return;
+        const key = `${yr}|${cycle}|${row.dest}|${wt}`;
+        counts[key] = (counts[key]||0) + 1;
+      });
+
+      currentCounts = counts;
+
+      // Discrepancies
+      const issues = checkDiscrepancies(rows);
+      showDiscrepancies(issues);
+
+      // Stats
+      const total = Object.values(counts).reduce((a,b)=>a+b,0);
+      const yr2026 = rows.filter(r=>r.startDate && r.startDate.getFullYear()===2026).length;
+      const yr2027 = rows.filter(r=>r.startDate && r.startDate.getFullYear()===2027).length;
+      showStatus(`✅ Processed ${data.length} rows — ${total} venturers counted (${yr2026} in 2026, ${yr2027} in 2027)${issues.length ? ` · ⚠️ ${issues.length} discrepancies` : ''}`, '');
+
+      document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})}`;
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('controls-row').style.display = 'block';
+      document.getElementById('nationals-panel').classList.add('show');
+
+      renderNationalsPanel();
+      renderYear(2026);
+      renderYear(2027);
+      updateSummary();
+
+    } catch(err) {
+      showStatus('Error reading file: ' + err.message, 'error');
+      console.error(err);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderYear(year) {
+  const container = document.getElementById(`results-${year}`);
+  container.innerHTML = '';
+  let yearTotal = 0;
+
+  for (let cycle = 1; cycle <= 3; cycle++) {
+    const cycleDests = DEST_ORDER.filter(d => CYCLE_BOUNDS[year]?.[cycle]?.[d]);
+    if (!cycleDests.length) continue;
+
+    const cycleBlock = document.createElement('div');
+    cycleBlock.className = 'cycle-block';
+
+    const cycleHdr = document.createElement('div');
+    cycleHdr.className = 'cycle-header';
+    cycleHdr.textContent = CYCLE_LABELS[cycle];
+    cycleBlock.appendChild(cycleHdr);
+
+    cycleDests.forEach(dest => {
+      const wtList = (WT_BY_CYCLE[`${year}|${cycle}`]||[]).filter(wt => CYCLE_BOUNDS[year][cycle][dest]?.[wt]);
+      if (!wtList.length) return;
+
+      const destHdr = document.createElement('div');
+      destHdr.className = 'dest-header';
+      destHdr.textContent = dest;
+      cycleBlock.appendChild(destHdr);
+
+      const table = document.createElement('table');
+      table.innerHTML = `<thead><tr><th>Week Type</th><th>Dates</th><th>Venturers</th><th>Nationals</th><th>Net</th></tr></thead>`;
+      const tbody = document.createElement('tbody');
+
+      let sv = 0, sn = 0;
+      wtList.forEach(wt => {
+        const bounds = CYCLE_BOUNDS[year][cycle][dest][wt];
+        const key = `${year}|${cycle}|${dest}|${wt}`;
+        const cnt = currentCounts[key]||0;
+        const nat = NATIONALS[key]||0;
+        const net = cnt - nat;
+        sv += cnt; sn += nat;
+
+        const dateStr = `${numToStr(bounds[0])} – ${numToStr(bounds[1])}`;
+        const tr = document.createElement('tr');
+        if (cnt > 0) tr.classList.add('has-count');
+        tr.innerHTML = `
+          <td>${LABEL_MAP[wt]||wt}</td>
+          <td>${dateStr}</td>
+          <td class="${cnt===0?'zero-val':''}">${cnt||0}</td>
+          <td class="${nat===0?'zero-val':''}">${nat||0}</td>
+          <td class="net-val">${net}</td>`;
+        tbody.appendChild(tr);
+        yearTotal += cnt;
+      });
+
+      const totalRow = document.createElement('tr');
+      totalRow.className = 'total-row';
+      totalRow.innerHTML = `<td>TOTAL – ${dest}</td><td></td><td>${sv}</td><td>${sn}</td><td class="net-val">${sv-sn}</td>`;
+      tbody.appendChild(totalRow);
+      table.appendChild(tbody);
+      cycleBlock.appendChild(table);
+    });
+
+    // Copy button per cycle
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-table-btn';
+    copyBtn.textContent = `📋 Copy ${CYCLE_LABELS[cycle]} to clipboard`;
+    const capturedBlock = cycleBlock;
+    const capturedYear = year;
+    const capturedCycle = cycle;
+    copyBtn.onclick = () => copyBlock(capturedYear, capturedCycle);
+    cycleBlock.appendChild(copyBtn);
+
+    container.appendChild(cycleBlock);
+  }
+
+  return yearTotal;
+}
+
+function updateSummary() {
+  const t26 = Object.entries(currentCounts).filter(([k])=>k.startsWith('2026')).reduce((a,[,v])=>a+v,0);
+  const t27 = Object.entries(currentCounts).filter(([k])=>k.startsWith('2027')).reduce((a,[,v])=>a+v,0);
+  document.getElementById('summary-text').textContent = `2026: ${t26} venturers · 2027: ${t27} venturers · Total: ${t26+t27}`;
+}
+
+function switchYear(year, el) {
+  activeYear = year;
+  document.querySelectorAll('.year-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('results-2026').style.display = year===2026?'block':'none';
+  document.getElementById('results-2027').style.display = year===2027?'block':'none';
+}
+
+// ─── NATIONALS ────────────────────────────────────────────────────────────────
+function renderNationalsPanel() {
+  const grid = document.getElementById('nationals-grid');
+  grid.innerHTML = '';
+  Object.entries(NATIONALS).forEach(([key, val]) => {
+    const [yr,cy,dest,wt] = key.split('|');
+    const row = document.createElement('div');
+    row.className = 'national-row';
+    row.innerHTML = `
+      <label>${yr} · C${cy} · ${dest} · ${LABEL_MAP[wt]||wt}</label>
+      <input type="number" min="0" value="${val}" data-key="${key}" onchange="updateNational('${key}', this.value)">
+      <button class="btn btn-red" onclick="removeNational('${key}')" title="Remove">✕</button>`;
+    grid.appendChild(row);
+  });
+  if (Object.keys(NATIONALS).length === 0) {
+    grid.innerHTML = '<p style="font-size:0.82rem;color:var(--text-light)">No nationals set. Add one below.</p>';
+  }
+}
+
+function updateNational(key, val) {
+  NATIONALS[key] = parseInt(val)||0;
+  renderYear(2026); renderYear(2027); updateSummary();
+}
+
+function removeNational(key) {
+  delete NATIONALS[key];
+  renderNationalsPanel();
+  renderYear(2026); renderYear(2027); updateSummary();
+}
+
+function addNational() {
+  const yr  = document.getElementById('add-year').value;
+  const cy  = document.getElementById('add-cycle').value;
+  const dest= document.getElementById('add-dest').value;
+  const wt  = document.getElementById('add-wt').value;
+  const cnt = parseInt(document.getElementById('add-count').value)||0;
+  const key = `${yr}|${cy}|${dest}|${wt}`;
+  NATIONALS[key] = cnt;
+  renderNationalsPanel();
+  renderYear(2026); renderYear(2027); updateSummary();
+  toast('National added');
+}
+
+function toggleNationals() {
+  const header = document.getElementById('nationals-toggle');
+  const body   = document.getElementById('nationals-body');
+  header.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+// ─── COPY ─────────────────────────────────────────────────────────────────────
+function copyBlock(year, cycle) {
+  const dests = DEST_ORDER.filter(d => CYCLE_BOUNDS[year]?.[cycle]?.[d]);
+  const lines = [`Cycle ${cycle} ${year}`,''];
+  dests.forEach(dest => {
+    const wtList = (WT_BY_CYCLE[`${year}|${cycle}`]||[]).filter(wt => CYCLE_BOUNDS[year][cycle][dest]?.[wt]);
+    if (!wtList.length) return;
+    lines.push(dest);
+    lines.push(['Week Type','Dates','Venturers','Nationals','Net'].join('\t'));
+    let sv=0,sn=0;
+    wtList.forEach(wt => {
+      const bounds = CYCLE_BOUNDS[year][cycle][dest][wt];
+      const key = `${year}|${cycle}|${dest}|${wt}`;
+      const cnt = currentCounts[key]||0;
+      const nat = NATIONALS[key]||0;
+      sv+=cnt; sn+=nat;
+      const dateStr = `${numToStr(bounds[0])} – ${numToStr(bounds[1])}`;
+      lines.push([LABEL_MAP[wt]||wt, dateStr, cnt, nat, cnt-nat].join('\t'));
+    });
+    lines.push([`TOTAL – ${dest}`, '', sv, sn, sv-sn].join('\t'));
+    lines.push('');
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('Copied to clipboard — paste into Excel!'));
+}
+
+function copyAllTables() {
+  const year = activeYear;
+  const lines = [`RALEIGH INTERNATIONAL — ${year} VENTURER SALES SUMMARY`,`Updated: ${new Date().toLocaleDateString('en-GB')}`,''];
+  for (let cycle=1;cycle<=3;cycle++) {
+    const dests = DEST_ORDER.filter(d => CYCLE_BOUNDS[year]?.[cycle]?.[d]);
+    if (!dests.length) continue;
+    lines.push(CYCLE_LABELS[cycle],'');
+    dests.forEach(dest => {
+      const wtList = (WT_BY_CYCLE[`${year}|${cycle}`]||[]).filter(wt => CYCLE_BOUNDS[year][cycle][dest]?.[wt]);
+      if (!wtList.length) return;
+      lines.push(dest);
+      lines.push(['Week Type','Dates','Venturers','Nationals','Net'].join('\t'));
+      let sv=0,sn=0;
+      wtList.forEach(wt => {
+        const bounds = CYCLE_BOUNDS[year][cycle][dest][wt];
+        const key = `${year}|${cycle}|${dest}|${wt}`;
+        const cnt = currentCounts[key]||0, nat = NATIONALS[key]||0;
+        sv+=cnt; sn+=nat;
+        lines.push([LABEL_MAP[wt]||wt,`${numToStr(bounds[0])} – ${numToStr(bounds[1])}`,cnt,nat,cnt-nat].join('\t'));
+      });
+      lines.push([`TOTAL – ${dest}`,'',sv,sn,sv-sn].join('\t'),'');
+    });
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('Full year copied! Paste straight into Excel.'));
+}
+
+// ─── DOWNLOAD EXCEL ───────────────────────────────────────────────────────────
+function downloadExcel() {
+  const year = activeYear;
+  const wsData = [['RALEIGH INTERNATIONAL — ' + year + ' VENTURER SALES SUMMARY'],['Updated: ' + new Date().toLocaleDateString('en-GB')],[]];
+  for (let cycle=1;cycle<=3;cycle++) {
+    const dests = DEST_ORDER.filter(d => CYCLE_BOUNDS[year]?.[cycle]?.[d]);
+    if (!dests.length) continue;
+    wsData.push([CYCLE_LABELS[cycle]]); wsData.push([]);
+    dests.forEach(dest => {
+      const wtList = (WT_BY_CYCLE[`${year}|${cycle}`]||[]).filter(wt => CYCLE_BOUNDS[year][cycle][dest]?.[wt]);
+      if (!wtList.length) return;
+      wsData.push([dest]);
+      wsData.push(['Week Type','Dates','Venturers','Nationals','Net']);
+      let sv=0,sn=0;
+      wtList.forEach(wt => {
+        const bounds = CYCLE_BOUNDS[year][cycle][dest][wt];
+        const key = `${year}|${cycle}|${dest}|${wt}`;
+        const cnt=currentCounts[key]||0, nat=NATIONALS[key]||0;
+        sv+=cnt; sn+=nat;
+        wsData.push([LABEL_MAP[wt]||wt,`${numToStr(bounds[0])} – ${numToStr(bounds[1])}`,cnt,nat,cnt-nat]);
+      });
+      wsData.push([`TOTAL – ${dest}`,'',sv,sn,sv-sn],[]); 
+    });
+  }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  XLSX.utils.book_append_sheet(wb, ws, `${year} Summary`);
+  XLSX.writeFile(wb, `Raleigh_Sales_${year}.xlsx`);
+  toast('Excel file downloaded!');
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function showStatus(msg, type) {
+  const bar = document.getElementById('status-bar');
+  bar.textContent = msg;
+  bar.className = 'status-bar show' + (type ? ' ' + type : '');
+}
+
+function showDiscrepancies(issues) {
+  const box  = document.getElementById('discrepancy-box');
+  const list = document.getElementById('discrepancy-list');
+  if (!issues.length) { box.classList.remove('show'); return; }
+  box.classList.add('show');
+  list.innerHTML = issues.map(iss => `
+    <div class="discrepancy-item">
+      <strong>Row ${iss.rowNum}: ${iss.product} (${iss.dest} · ${iss.startStr})</strong>
+      ${iss.probs.map(p=>`<span>⚠ ${p}</span>`).join('<br>')}
+    </div>`).join('');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+// ─── DRAG & DROP ──────────────────────────────────────────────────────────────
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+</script>
+</body>
+</html>
