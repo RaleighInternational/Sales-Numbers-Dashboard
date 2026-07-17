@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raleigh Sales Tracker v3</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root { --dark-green:#085041; --teal:#1D9E75; --teal-light:#e8f7f2; --teal-mid:#b2e0d0; --amber:#f5a623; --red:#e74c3c; --grey-bg:#f4f6f5; --grey-border:#d0dcd8; --text-dark:#1a2e28; --text-mid:#4a6b62; --row-green:#ecf8f3; --total-bg:#fff8e6; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',Arial,sans-serif; background:var(--grey-bg); color:var(--text-dark); }
+  header { background:#b00020; color:white; padding:16px 32px; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:1.2rem; font-weight:700; }
+  header span { font-size:0.78rem; opacity:0.8; }
+  main { max-width:1100px; margin:0 auto; padding:24px 20px 60px; }
+
+  /* DEBUG BOX - remove once working */
+  .debug-box { background:#1a1a2e; color:#00ff88; font-family:monospace; font-size:0.78rem; padding:16px; border-radius:8px; margin-bottom:16px; display:none; white-space:pre-wrap; word-break:break-all; }
+  .debug-box.show { display:block; }
+
+  .upload-zone { background:white; border:2px dashed var(--teal); border-radius:12px; padding:24px 28px; cursor:pointer; transition:all 0.2s; margin-bottom:16px; display:flex; align-items:center; gap:16px; }
+  .upload-zone:hover { background:var(--teal-light); }
+  .upload-zone .icon { font-size:2rem; flex-shrink:0; }
+  .upload-zone h2 { color:var(--dark-green); font-size:1rem; margin-bottom:3px; }
+  .upload-zone p { color:var(--text-mid); font-size:0.8rem; }
+  .upload-zone input[type="file"] { display:none; }
+  .browse-btn { margin-left:auto; flex-shrink:0; background:var(--teal); color:white; border:none; padding:10px 20px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .browse-btn:hover { background:var(--dark-green); }
+
+  .status-bar { padding:10px 16px; border-radius:8px; font-size:0.83rem; margin-bottom:14px; display:none; }
+  .status-bar.show { display:block; }
+  .status-bar.ok { background:var(--teal); color:white; }
+  .status-bar.error { background:var(--red); color:white; }
+
+  .discrepancy-box { background:#fff8e6; border:1.5px solid var(--amber); border-radius:10px; padding:14px 18px; margin-bottom:16px; display:none; }
+  .discrepancy-box.show { display:block; }
+  .discrepancy-box h3 { color:#b7760a; font-size:0.88rem; margin-bottom:10px; }
+  .discrepancy-item { font-size:0.8rem; margin-bottom:8px; padding:6px 10px; border-left:3px solid var(--amber); background:white; border-radius:0 6px 6px 0; }
+  .discrepancy-item strong { display:block; color:#8a5a00; margin-bottom:2px; }
+
+  .nationals-panel { background:white; border-radius:12px; border:1.5px solid var(--grey-border); margin-bottom:18px; overflow:hidden; }
+  .panel-header { background:var(--dark-green); color:white; padding:11px 18px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+  .panel-header h3 { font-size:0.88rem; }
+  .ti { transition:transform 0.2s; }
+  .panel-header.open .ti { transform:rotate(180deg); }
+  .panel-body { display:none; padding:16px 18px; }
+  .panel-body.open { display:block; }
+  .nationals-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:8px; }
+  .nat-row { display:flex; align-items:center; gap:8px; background:var(--teal-light); border-radius:8px; padding:7px 10px; }
+  .nat-row label { font-size:0.8rem; flex:1; }
+  .nat-row input { width:54px; text-align:center; border:1.5px solid var(--teal-mid); border-radius:6px; padding:4px; font-size:0.88rem; font-weight:700; color:var(--dark-green); }
+  .nat-row .del-btn { background:none; border:none; color:#ccc; cursor:pointer; font-size:1rem; }
+  .nat-row .del-btn:hover { color:var(--red); }
+  .add-nat-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:12px; border-top:1px solid var(--grey-border); }
+  .add-nat-row select,.add-nat-row input { border:1.5px solid var(--grey-border); border-radius:6px; padding:6px 8px; font-size:0.8rem; background:white; }
+  .btn { padding:7px 14px; border:none; border-radius:7px; cursor:pointer; font-size:0.8rem; font-weight:600; }
+  .btn-teal { background:var(--teal); color:white; } .btn-teal:hover { background:var(--dark-green); }
+  .btn-outline { background:white; color:var(--dark-green); border:1.5px solid var(--dark-green); } .btn-outline:hover { background:var(--dark-green); color:white; }
+
+  .year-tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .year-tab { padding:8px 22px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.88rem; border:2px solid var(--grey-border); background:white; color:var(--text-mid); transition:all 0.15s; }
+  .year-tab.active { background:var(--dark-green); color:white; border-color:var(--dark-green); }
+  .action-bar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .summary-text { color:var(--text-mid); font-size:0.82rem; margin-left:auto; font-weight:600; }
+
+  .results-section { background:white; border-radius:12px; border:1.5px solid var(--grey-border); overflow:hidden; }
+  .cycle-header { background:var(--dark-green); color:white; padding:10px 18px; font-size:0.88rem; font-weight:700; }
+  .dest-header { background:#2E6E8E; color:white; padding:7px 18px; font-size:0.78rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+  table { width:100%; border-collapse:collapse; }
+  thead th { background:#daeef7; color:var(--dark-green); font-size:0.78rem; font-weight:700; padding:7px 16px; text-align:left; border-bottom:1.5px solid var(--grey-border); }
+  thead th:not(:first-child) { text-align:center; }
+  tbody td { padding:6px 16px; font-size:0.81rem; border-bottom:1px solid #eef2f1; background:white; }
+  tbody td:not(:first-child) { text-align:center; font-weight:600; }
+  tbody tr.has-count td { background:var(--row-green); }
+  .total-row td { background:var(--total-bg)!important; font-weight:700; font-size:0.83rem; border-top:2px solid #e8d5a0; }
+  .zero-val { color:#ccc; font-weight:400!important; }
+  .net-col { color:var(--dark-green); }
+  .copy-cycle-btn { display:block; width:100%; padding:6px 16px; background:var(--teal-light); border:none; border-top:1px solid var(--teal-mid); font-size:0.77rem; color:var(--teal); cursor:pointer; font-weight:600; text-align:right; }
+  .copy-cycle-btn:hover { background:var(--teal-mid); }
+  .toast { position:fixed; bottom:24px; right:24px; background:var(--dark-green); color:white; padding:11px 20px; border-radius:9px; font-size:0.85rem; font-weight:600; opacity:0; transform:translateY(8px); transition:all 0.2s; pointer-events:none; z-index:999; }
+  .toast.show { opacity:1; transform:translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌿 Raleigh International — Sales Tracker</h1>
+  <span id="last-updated">VERSION 3 — No file loaded</span>
+</header>
+<main>
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('fi').click()">
+    <div class="icon">📊</div>
+    <div>
+      <h2>Upload passenger registry to update numbers</h2>
+      <p>Drop your .xlsx file here · 2026 & 2027 data · 2 & 3 week venturers ignored automatically</p>
+    </div>
+    <button class="browse-btn" onclick="event.stopPropagation();document.getElementById('fi').click()">Browse file</button>
+    <input type="file" id="fi" accept=".xlsx" onchange="handleFile(this.files[0])">
+  </div>
+
+  <!-- DEBUG BOX - shows raw parsed values so we can see what's happening -->
+  <div class="debug-box" id="debug-box"></div>
+
+  <div class="status-bar" id="status-bar"></div>
+  <div class="discrepancy-box" id="discrepancy-box"><h3>⚠️ Data discrepancies found — please check these rows in your source file</h3><div id="discrepancy-list"></div></div>
+
+  <div class="nationals-panel">
+    <div class="panel-header" id="nat-header" onclick="toggleNationals()"><h3>✏️ Nationals — click to edit</h3><span class="ti">▼</span></div>
+    <div class="panel-body" id="nat-body">
+      <p style="font-size:0.8rem;color:var(--text-mid);margin-bottom:12px;">Nationals are subtracted from venturer counts to give the Net figure.</p>
+      <div class="nationals-grid" id="nationals-grid"></div>
+      <div class="add-nat-row">
+        <span style="font-size:0.8rem;font-weight:600;color:var(--text-mid);">Add national:</span>
+        <select id="a-yr"><option>2026</option><option>2027</option></select>
+        <select id="a-cy"><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option></select>
+        <select id="a-de"><option>Costa Rica</option><option>South Africa</option><option>Borneo</option></select>
+        <select id="a-wt"><option value="10w">10 Weeks</option><option value="7A">7A</option><option value="7B">7B</option><option value="5A">5A</option><option value="5B">5B</option><option value="4A">4A</option><option value="4B">4B</option></select>
+        <input type="number" id="a-cnt" value="1" min="0" style="width:56px;">
+        <button class="btn btn-teal" onclick="addNational()">+ Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="year-tabs"><button class="year-tab active" onclick="switchYear(2026,this)">2026</button><button class="year-tab" onclick="switchYear(2027,this)">2027</button></div>
+  <div class="action-bar">
+    <button class="btn btn-teal" onclick="downloadExcel()">⬇ Download Excel</button>
+    <button class="btn btn-outline" onclick="copyAllTables()">📋 Copy year to clipboard</button>
+    <span class="summary-text" id="summary-text">Upload a file to see totals</span>
+  </div>
+  <div id="results-2026" class="results-section"></div>
+  <div id="results-2027" class="results-section" style="display:none;"></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+let NATIONALS = {'2026|1|Borneo|10w':1,'2026|1|Borneo|5A':1,'2026|1|South Africa|10w':2,'2026|1|Costa Rica|10w':3,'2026|2|Costa Rica|10w':1};
+
+const CB = {
+  2026:{
+    1:{'Costa Rica':{'10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260317]},'South Africa':{'10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260318]},'Borneo':{'10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260319]}},
+    2:{'Costa Rica':{'10w':[20260629,20260903],'7A':[20260629,20260814],'7B':[20260719,20260903],'5A':[20260629,20260803],'5B':[20260719,20260823],'4A':[20260629,20260724],'4B':[20260719,20260814]},'South Africa':{'10w':[20260629,20260903],'7A':[20260629,20260814],'7B':[20260719,20260903],'5A':[20260629,20260803],'5B':[20260719,20260824],'4A':[20260629,20260724],'4B':[20260719,20260814]}},
+    3:{'Costa Rica':{'10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261117],'4A':[20261013,20261109]},'South Africa':{'10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261118],'4A':[20261013,20261107]},'Borneo':{'10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261119],'4A':[20261013,20261107]}},
+  },
+  2027:{
+    1:{'Costa Rica':{'10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270315],'4A':[20270208,20270307]},'South Africa':{'10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270316],'4A':[20270208,20270305]},'Borneo':{'10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270315],'4A':[20270208,20270305]}},
+    2:{'Costa Rica':{'10w':[20270628,20270902],'7A':[20270628,20270813],'7B':[20270718,20270902],'5A':[20270628,20270802],'5B':[20270718,20270823],'4A':[20270628,20270725],'4B':[20270718,20270813]},'South Africa':{'10w':[20270628,20270902],'7A':[20270628,20270813],'7B':[20270718,20270902],'5A':[20270628,20270803],'5B':[20270718,20270824],'4A':[20270628,20270723],'4B':[20270718,20270813]}},
+    3:{'Costa Rica':{'10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271116],'4A':[20271012,20271108]},'South Africa':{'10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271117],'4A':[20271012,20271106]},'Borneo':{'10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271116],'4A':[20271012,20271106]}},
+  },
+};
+
+const WTC={'2026|1':['10w','7A','7B','5A'],'2026|2':['10w','7A','7B','5A','5B','4A','4B'],'2026|3':['10w','7A','7B','5A','4A'],'2027|1':['10w','7A','7B','5A','4A'],'2027|2':['10w','7A','7B','5A','5B','4A','4B'],'2027|3':['10w','7A','7B','5A','4A']};
+const DEST_ORDER=['Costa Rica','South Africa','Borneo'];
+const LM={'10w':'10 Weeks','7A':'7 Weeks – A','7B':'7 Weeks – B','5A':'5 Weeks – A','5B':'5 Weeks – B','4A':'4 Weeks – A','4B':'4 Weeks – B'};
+const CL={1:'Cycle 1 — Feb to Apr',2:'Cycle 2 — Jun to Sep',3:'Cycle 3 — Oct to Dec'};
+const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let currentCounts={}, activeYear=2026;
+
+// ─── DATE PARSING — handles ALL formats SheetJS might return ──────────────────
+function parseDate(val) {
+  if (val === null || val === undefined || val === '') return null;
+  // JS Date object
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    return { year:val.getUTCFullYear(), month:val.getUTCMonth()+1, day:val.getUTCDate() };
+  }
+  // Excel serial number
+  if (typeof val === 'number') {
+    if (val < 1 || val > 100000) return null;
+    const ms = (val - 25569) * 86400000;
+    const d = new Date(ms);
+    return { year:d.getUTCFullYear(), month:d.getUTCMonth()+1, day:d.getUTCDate() };
+  }
+  // Strings
+  if (typeof val === 'string') {
+    // ISO: "2026-02-10" or "2026-02-10T..."
+    const iso = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return { year:+iso[1], month:+iso[2], day:+iso[3] };
+    // DD/MM/YYYY — UK/Excel locale e.g. "10/02/2026"
+    const parts = val.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+      const d2 = +parts[0], m2 = +parts[1], y2 = +parts[2];
+      if (d2 >= 1 && d2 <= 31 && m2 >= 1 && m2 <= 12 && y2 > 2000) {
+        return { year:y2, month:m2, day:d2 };
+      }
+    }
+    // Numeric string e.g. "46063"
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 1000) {
+      const ms = (num - 25569) * 86400000;
+      const d = new Date(ms);
+      return { year:d.getUTCFullYear(), month:d.getUTCMonth()+1, day:d.getUTCDate() };
+    }
+  }
+  return null;
+}
+
+function ymdToNum(y) { return y ? y.year*10000+y.month*100+y.day : 0; }
+function numToStr(n) { const y=Math.floor(n/10000),m=Math.floor((n%10000)/100),d=n%100; return `${String(d).padStart(2,'0')} ${MNS[m-1]} ${y}`; }
+function ymdStr(y) { return y ? `${String(y.day).padStart(2,'0')} ${MNS[y.month-1]} ${y.year}` : 'no date'; }
+
+// ─── WEEK TYPE ────────────────────────────────────────────────────────────────
+function identifyWeekType(sN,eN,year,cycle,dest) {
+  const bounds=((CB[year]||{})[cycle]||{})[dest];
+  if(!bounds) return null;
+  let best=null,bs=999;
+  for(const [wt,[s,e]] of Object.entries(bounds)){
+    const sd=Math.abs(sN-s),ed=Math.abs(eN-e);
+    if(sd<=4&&ed<=4){const sc=sd+ed;if(sc<bs){bs=sc;best=wt;}}
+  }
+  if(!best){for(const [wt,[s,e]] of Object.entries(bounds)){const ed=Math.abs(eN-e);if(ed<=4&&ed<bs){bs=ed;best=wt;}}}
+  return best;
+}
+
+// ─── FILE HANDLER ─────────────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      // Try BOTH reading methods and use whichever gives valid dates
+      const wb = XLSX.read(e.target.result, {type:'binary', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+
+      // Get raw data with dates as Date objects
+      const data = XLSX.utils.sheet_to_json(ws, {raw:false, cellDates:true, defval:''});
+      if (!data.length){showStatus('No data found.','error');return;}
+
+      const cols=Object.keys(data[0]);
+      const fc=keys=>cols.find(c=>keys.some(k=>c.toLowerCase().includes(k.toLowerCase())))||null;
+      const PC=fc(['Product_Name']), SC=fc(['Grouping_SKU']), DC=fc(['Destination_Name']);
+      const STC=fc(['Date_Start']), ENC=fc(['Date_End']);
+      if(!STC||!ENC){showStatus('Cannot find date columns.','error');return;}
+
+      // DEBUG: show raw values from first 5 rows
+      const debugLines=['=== DEBUG: First 5 rows raw date values ==='];
+      data.slice(0,5).forEach((r,i)=>{
+        const sv=r[STC], ev=r[ENC];
+        const sp=parseDate(sv), ep=parseDate(ev);
+        debugLines.push(`Row ${i+2}: startRaw=${JSON.stringify(sv)} (type:${typeof sv}) → parsed:${ymdStr(sp)}`);
+        debugLines.push(`        endRaw=${JSON.stringify(ev)} (type:${typeof ev}) → parsed:${ymdStr(ep)}`);
+        debugLines.push(`        dest="${r[DC]}" product="${String(r[PC]||'').substring(0,50)}"`);
+        debugLines.push('');
+      });
+      const dbx=document.getElementById('debug-box');
+      dbx.textContent=debugLines.join('\n'); dbx.classList.add('show');
+
+      // Parse rows
+      const rows=data.map(r=>({
+        product:String(r[PC]||''), sku:String(r[SC]||''), dest:String(r[DC]||''),
+        startYMD:parseDate(r[STC]), endYMD:parseDate(r[ENC]),
+      }));
+
+      // Count
+      const counts={};
+      rows.forEach(row=>{
+        const s=row.startYMD,en=row.endYMD;
+        if(!s||!en) return;
+        const yr=s.year; if(yr!==2026&&yr!==2027) return;
+        if(!row.dest) return;
+        // Calc days properly
+        const sDate=new Date(Date.UTC(s.year,s.month-1,s.day));
+        const eDate=new Date(Date.UTC(en.year,en.month-1,en.day));
+        const days=Math.round((eDate-sDate)/86400000);
+        if(days<24) return; // ignore 2/3 weekers
+        const m=s.month, cycle=m<=5?1:m<=9?2:3;
+        const wt=identifyWeekType(ymdToNum(s),ymdToNum(en),yr,cycle,row.dest);
+        if(!wt) return;
+        const key=`${yr}|${cycle}|${row.dest}|${wt}`;
+        counts[key]=(counts[key]||0)+1;
+      });
+
+      currentCounts=counts;
+      const {issues, excluded}=checkDiscrepancies(rows);
+      showDiscrepancies(issues, excluded);
+
+      const total=Object.values(counts).reduce((a,b)=>a+b,0);
+      const y26=rows.filter(r=>r.startYMD?.year===2026).length;
+      const y27=rows.filter(r=>r.startYMD?.year===2027).length;
+      showStatus(`✅ ${data.length} rows processed — ${total} venturers counted (${y26} in 2026, ${y27} in 2027)${issues.length?` · ⚠️ ${issues.length} discrepancies`:''}`, 'ok');
+      document.getElementById('last-updated').textContent=`V3 Updated: ${new Date().toLocaleString('en-GB')}`;
+      renderAll();
+    } catch(err){showStatus('Error: '+err.message,'error');console.error(err);}
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ─── DISCREPANCIES ────────────────────────────────────────────────────────────
+function checkDiscrepancies(rows){
+  const issues=[], excluded=[];
+  rows.forEach((row,i)=>{
+    const name=row.product, dest=row.dest;
+
+    // Flag 2/3 weekers by product name — excluded from counts
+    const shortMatch = name.match(/\b([23])\s*w(ee)?k/i);
+    if(shortMatch){
+      excluded.push({rowNum:i+2, product:name, dest, weeks:shortMatch[1]});
+      return; // no further checks needed for these rows
+    }
+
+    if(!row.startYMD) return;
+    const probs=[],yr=row.startYMD.year,m=row.startYMD.month,cycle=m<=5?1:m<=9?2:3;
+    const lyM=name.match(/20(2[4-9])/);const lY=lyM?parseInt('20'+lyM[1]):null;
+    const skM=row.sku.match(/Cycle\s*(\d)/i);const lC=skM?parseInt(skM[1]):null;
+    if(lC&&lC!==cycle) probs.push(`Cycle mismatch — name says C${lC}, start date says C${cycle}`);
+    if(lY&&lY!==yr) probs.push(`Year mismatch — name says ${lY}, start date says ${yr}`);
+    if(dest.toLowerCase().includes('borneo')&&cycle===2) probs.push('Borneo has no Cycle 2');
+    let din='';
+    if(name.toLowerCase().includes('costa rica'))din='Costa Rica';
+    else if(name.toLowerCase().includes('south africa'))din='South Africa';
+    else if(name.toLowerCase().includes('borneo'))din='Borneo';
+    if(din&&din!==dest) probs.push(`Destination mismatch — name='${din}', field='${dest}'`);
+    if(probs.length) issues.push({rowNum:i+2,product:name,dest,startStr:ymdStr(row.startYMD),probs});
+  });
+  return {issues, excluded};
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderAll(){renderYear(2026);renderYear(2027);updateSummary();}
+function renderYear(year){
+  const c=document.getElementById(`results-${year}`); c.innerHTML='';
+  for(let cy=1;cy<=3;cy++){
+    const dests=DEST_ORDER.filter(d=>((CB[year]||{})[cy]||{})[d]);
+    if(!dests.length) continue;
+    const blk=document.createElement('div');
+    const ch=document.createElement('div');ch.className='cycle-header';ch.textContent=CL[cy];blk.appendChild(ch);
+    dests.forEach(dest=>{
+      const wts=(WTC[`${year}|${cy}`]||[]).filter(w=>((CB[year][cy][dest])||{})[w]);
+      if(!wts.length) return;
+      const dh=document.createElement('div');dh.className='dest-header';dh.textContent=dest;blk.appendChild(dh);
+      const tbl=document.createElement('table');
+      tbl.innerHTML='<thead><tr><th>Week Type</th><th>Dates</th><th>Venturers</th><th>Nationals</th><th>Net</th></tr></thead>';
+      const tb=document.createElement('tbody');
+      let sv=0,sn=0;
+      wts.forEach(wt=>{
+        const b=CB[year][cy][dest][wt],key=`${year}|${cy}|${dest}|${wt}`;
+        const cnt=currentCounts[key]||0,nat=NATIONALS[key]||0,net=cnt-nat;
+        sv+=cnt;sn+=nat;
+        const tr=document.createElement('tr');if(cnt>0)tr.classList.add('has-count');
+        tr.innerHTML=`<td>${LM[wt]||wt}</td><td style="color:var(--text-mid);font-weight:400">${numToStr(b[0])} – ${numToStr(b[1])}</td><td class="${cnt===0?'zero-val':''}">${cnt}</td><td class="${nat===0?'zero-val':''}">${nat}</td><td class="net-col">${net}</td>`;
+        tb.appendChild(tr);
+      });
+      const tr=document.createElement('tr');tr.className='total-row';
+      tr.innerHTML=`<td>TOTAL – ${dest}</td><td></td><td>${sv}</td><td>${sn}</td><td class="net-col">${sv-sn}</td>`;
+      tb.appendChild(tr);tbl.appendChild(tb);blk.appendChild(tbl);
+    });
+    const cb=document.createElement('button');cb.className='copy-cycle-btn';
+    cb.textContent=`📋 Copy ${CL[cy]} to clipboard`;cb.onclick=()=>copyBlock(year,cy);blk.appendChild(cb);
+    c.appendChild(blk);
+  }
+}
+
+function updateSummary(){
+  if(!Object.keys(currentCounts).length){document.getElementById('summary-text').textContent='Upload a file to see totals';return;}
+  const t26=Object.entries(currentCounts).filter(([k])=>k.startsWith('2026')).reduce((a,[,v])=>a+v,0);
+  const t27=Object.entries(currentCounts).filter(([k])=>k.startsWith('2027')).reduce((a,[,v])=>a+v,0);
+  document.getElementById('summary-text').textContent=`2026: ${t26} · 2027: ${t27} · Total: ${t26+t27}`;
+}
+
+function switchYear(year,el){activeYear=year;document.querySelectorAll('.year-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');document.getElementById('results-2026').style.display=year===2026?'block':'none';document.getElementById('results-2027').style.display=year===2027?'block':'none';}
+
+// ─── NATIONALS ────────────────────────────────────────────────────────────────
+function renderNationals(){
+  const g=document.getElementById('nationals-grid');g.innerHTML='';
+  const es=Object.entries(NATIONALS);
+  if(!es.length){g.innerHTML='<p style="font-size:0.8rem;color:#999">No nationals set.</p>';return;}
+  es.forEach(([key,val])=>{
+    const [yr,cy,dest,wt]=key.split('|');
+    const r=document.createElement('div');r.className='nat-row';
+    r.innerHTML=`<label>${yr} · C${cy} · ${dest} · ${LM[wt]||wt}</label><input type="number" min="0" value="${val}" onchange="updateNational('${key}',this.value)"><button class="del-btn" onclick="removeNational('${key}')">✕</button>`;
+    g.appendChild(r);
+  });
+}
+function updateNational(k,v){NATIONALS[k]=parseInt(v)||0;renderAll();}
+function removeNational(k){delete NATIONALS[k];renderNationals();renderAll();}
+function addNational(){
+  const k=`${document.getElementById('a-yr').value}|${document.getElementById('a-cy').value}|${document.getElementById('a-de').value}|${document.getElementById('a-wt').value}`;
+  NATIONALS[k]=parseInt(document.getElementById('a-cnt').value)||0;
+  renderNationals();renderAll();toast('National added ✓');
+}
+function toggleNationals(){document.getElementById('nat-header').classList.toggle('open');document.getElementById('nat-body').classList.toggle('open');}
+
+// ─── COPY & DOWNLOAD ──────────────────────────────────────────────────────────
+function tableToText(year,cycle){
+  const dests=DEST_ORDER.filter(d=>((CB[year]||{})[cycle]||{})[d]);
+  const lines=[`${CL[cycle]} — ${year}`,'']; 
+  dests.forEach(dest=>{
+    const wts=(WTC[`${year}|${cycle}`]||[]).filter(w=>((CB[year][cycle][dest])||{})[w]);
+    if(!wts.length) return;
+    lines.push(dest,['Week Type','Dates','Venturers','Nationals','Net'].join('\t'));
+    let sv=0,sn=0;
+    wts.forEach(wt=>{
+      const b=CB[year][cycle][dest][wt],k=`${year}|${cycle}|${dest}|${wt}`;
+      const cnt=currentCounts[k]||0,nat=NATIONALS[k]||0;sv+=cnt;sn+=nat;
+      lines.push([LM[wt]||wt,`${numToStr(b[0])} – ${numToStr(b[1])}`,cnt,nat,cnt-nat].join('\t'));
+    });
+    lines.push([`TOTAL – ${dest}`,'',sv,sn,sv-sn].join('\t'),'');
+  });
+  return lines.join('\n');
+}
+function copyBlock(year,cycle){navigator.clipboard.writeText(tableToText(year,cycle)).then(()=>toast('Copied — paste into Excel!'));}
+function copyAllTables(){let t=`RALEIGH INTERNATIONAL — ${activeYear} VENTURER SALES SUMMARY\n\n`;for(let c=1;c<=3;c++)t+=tableToText(activeYear,c)+'\n';navigator.clipboard.writeText(t).then(()=>toast('Full year copied!'));}
+function downloadExcel(){
+  const year=activeYear;
+  const rows=[['RALEIGH INTERNATIONAL — '+year+' VENTURER SALES SUMMARY'],['Updated: '+new Date().toLocaleDateString('en-GB')],[]];
+  for(let cy=1;cy<=3;cy++){
+    const dests=DEST_ORDER.filter(d=>((CB[year]||{})[cy]||{})[d]);if(!dests.length) continue;
+    rows.push([CL[cy]],[]);
+    dests.forEach(dest=>{
+      const wts=(WTC[`${year}|${cy}`]||[]).filter(w=>((CB[year][cy][dest])||{})[w]);if(!wts.length) return;
+      rows.push([dest],['Week Type','Dates','Venturers','Nationals','Net']);
+      let sv=0,sn=0;
+      wts.forEach(wt=>{const b=CB[year][cy][dest][wt],k=`${year}|${cy}|${dest}|${wt}`;const cnt=currentCounts[k]||0,nat=NATIONALS[k]||0;sv+=cnt;sn+=nat;rows.push([LM[wt]||wt,`${numToStr(b[0])} – ${numToStr(b[1])}`,cnt,nat,cnt-nat]);});
+      rows.push([`TOTAL – ${dest}`,'',sv,sn,sv-sn],[]);
+    });
+  }
+  const wbOut=XLSX.utils.book_new(),wsh=XLSX.utils.aoa_to_sheet(rows);
+  wsh['!cols']=[{wch:22},{wch:28},{wch:12},{wch:12},{wch:10}];
+  XLSX.utils.book_append_sheet(wbOut,wsh,`${year} Summary`);
+  XLSX.writeFile(wbOut,`Raleigh_Sales_${year}.xlsx`);
+  toast('Excel downloaded!');
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function showStatus(msg,type){const b=document.getElementById('status-bar');b.textContent=msg;b.className='status-bar show'+(type?' '+type:'');}
+function showDiscrepancies(issues, excluded){
+  const box=document.getElementById('discrepancy-box'),list=document.getElementById('discrepancy-list');
+  if(!issues.length && !excluded.length){box.classList.remove('show');return;}
+  box.classList.add('show');
+  let html='';
+  if(issues.length){
+    html+=issues.map(i=>`<div class="discrepancy-item" style="border-left-color:#f5a623"><strong>⚠️ Row ${i.rowNum}: ${i.product} · ${i.dest} · ${i.startStr}</strong>${i.probs.map(p=>`⚠ ${p}`).join('<br>')}</div>`).join('');
+  }
+  if(excluded.length){
+    html+=`<div style="margin-top:${issues.length?'12px':'0'}"><p style="font-size:0.8rem;font-weight:600;color:#4a6b62;margin-bottom:6px">ℹ️ ${excluded.length} row${excluded.length>1?'s':''} excluded from counts (${[...new Set(excluded.map(e=>e.weeks))].map(w=>w+'-week').join(' & ')} venturers):</p>`;
+    html+=excluded.map(e=>`<div class="discrepancy-item" style="border-left-color:#7a9b93;background:#f4f6f5"><strong style="color:#4a6b62">ℹ Row ${e.rowNum}: ${e.product} · ${e.dest}</strong>Not counted — ${e.weeks}-week venturers are excluded from the sales summary</div>`).join('');
+    html+='</div>';
+  }
+  list.innerHTML=html;
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+
+// Drag & drop
+const zone=document.getElementById('upload-zone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.style.background='var(--teal-light)';});
+zone.addEventListener('dragleave',()=>{zone.style.background='';});
+zone.addEventListener('drop',e=>{e.preventDefault();zone.style.background='';const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+
+// Init
+renderNationals();renderAll();
+</script>
+</body>
+</html>
