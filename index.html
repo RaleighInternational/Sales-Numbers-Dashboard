@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raleigh Sales Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{--dg:#085041;--tl:#1D9E75;--tll:#e8f7f2;--tlm:#b2e0d0;--am:#f5a623;--re:#e74c3c;--gb:#f4f6f5;--gr:#d0dcd8;--td:#1a2e28;--tm:#4a6b62;--tt:#7a9b93;--rg:#ecf8f3;--to:#fff8e6;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gb);color:var(--td);}
+  header{background:var(--dg);color:#fff;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+  header h1{font-size:1.15rem;font-weight:700;}
+  #last-updated{font-size:0.75rem;opacity:.75;}
+  main{max-width:1100px;margin:0 auto;padding:20px 18px 60px;}
+
+  /* UPLOAD */
+  .upload-zone{background:#fff;border:2px dashed var(--tl);border-radius:12px;padding:20px 24px;cursor:pointer;transition:all .2s;margin-bottom:14px;display:flex;align-items:center;gap:14px;}
+  .upload-zone:hover{background:var(--tll);}
+  .upload-zone .icon{font-size:1.8rem;flex-shrink:0;}
+  .upload-zone h2{color:var(--dg);font-size:.95rem;margin-bottom:2px;}
+  .upload-zone p{color:var(--tm);font-size:.78rem;}
+  .upload-zone input[type=file]{display:none;}
+  .browse-btn{margin-left:auto;flex-shrink:0;background:var(--tl);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .browse-btn:hover{background:var(--dg);}
+
+  /* STATUS */
+  .sbar{padding:9px 14px;border-radius:8px;font-size:.81rem;margin-bottom:12px;display:none;}
+  .sbar.show{display:block;} .sbar.ok{background:var(--tl);color:#fff;} .sbar.error{background:var(--re);color:#fff;}
+
+  /* DISCREPANCIES */
+  .dbox{background:#fff8e6;border:1.5px solid var(--am);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:none;}
+  .dbox.show{display:block;}
+  .dbox h3{color:#b7760a;font-size:.86rem;margin-bottom:8px;}
+  .di{font-size:.78rem;margin-bottom:7px;padding:5px 9px;border-left:3px solid var(--am);background:#fff;border-radius:0 5px 5px 0;}
+  .di strong{display:block;color:#8a5a00;margin-bottom:1px;}
+
+  /* PANELS */
+  .panel{background:#fff;border-radius:12px;border:1.5px solid var(--gr);margin-bottom:14px;overflow:hidden;}
+  .ph{background:var(--dg);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;}
+  .ph h3{font-size:.86rem;}
+  .ti{transition:transform .2s;} .ph.open .ti{transform:rotate(180deg);}
+  .pb{display:none;padding:14px 16px;} .pb.open{display:block;}
+  .ng{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:7px;}
+  .nr{display:flex;align-items:center;gap:7px;background:var(--tll);border-radius:8px;padding:6px 9px;}
+  .nr label{font-size:.78rem;flex:1;}
+  .nr input{width:52px;text-align:center;border:1.5px solid var(--tlm);border-radius:5px;padding:3px;font-size:.85rem;font-weight:700;color:var(--dg);}
+  .nr input:focus{outline:none;border-color:var(--tl);}
+  .nr .db{background:none;border:none;color:#ccc;cursor:pointer;font-size:.95rem;padding:0 2px;}
+  .nr .db:hover{color:var(--re);}
+  .anr{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--gr);}
+  .anr select,.anr input{border:1.5px solid var(--gr);border-radius:5px;padding:5px 7px;font-size:.78rem;background:#fff;}
+  .btn{padding:6px 13px;border:none;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;}
+  .btn-tl{background:var(--tl);color:#fff;} .btn-tl:hover{background:var(--dg);}
+  .btn-ol{background:#fff;color:var(--dg);border:1.5px solid var(--dg);} .btn-ol:hover{background:var(--dg);color:#fff;}
+  .btn-sm{padding:4px 9px;font-size:.74rem;}
+
+  /* DATE EDITOR */
+  .de-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px;margin-bottom:10px;}
+  .de-row{background:var(--tll);border-radius:8px;padding:7px 10px;}
+  .de-row label{font-size:.76rem;color:var(--td);display:block;margin-bottom:4px;font-weight:600;}
+  .de-inputs{display:flex;gap:6px;align-items:center;}
+  .de-inputs span{font-size:.74rem;color:var(--tm);}
+  .de-inputs input[type=date]{border:1.5px solid var(--tlm);border-radius:5px;padding:3px 6px;font-size:.78rem;flex:1;}
+  .de-filter{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .de-filter select{border:1.5px solid var(--gr);border-radius:6px;padding:5px 8px;font-size:.8rem;background:#fff;}
+
+  /* YEAR TABS + ACTIONS */
+  .ytabs{display:flex;gap:7px;margin-bottom:12px;}
+  .ytab{padding:7px 20px;border-radius:7px;cursor:pointer;font-weight:600;font-size:.86rem;border:2px solid var(--gr);background:#fff;color:var(--tm);transition:all .15s;}
+  .ytab.active{background:var(--dg);color:#fff;border-color:var(--dg);}
+  .abar{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+  .stext{color:var(--tm);font-size:.8rem;margin-left:auto;font-weight:600;}
+
+  /* RESULTS */
+  .rs{background:#fff;border-radius:12px;border:1.5px solid var(--gr);overflow:hidden;}
+  .ch{background:var(--dg);color:#fff;padding:9px 16px;font-size:.86rem;font-weight:700;}
+  .dh{background:#2E6E8E;color:#fff;padding:6px 16px;font-size:.76rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{background:#daeef7;color:var(--dg);font-size:.76rem;font-weight:700;padding:6px 14px;text-align:left;border-bottom:1.5px solid var(--gr);}
+  thead th:not(:first-child){text-align:center;}
+  tbody td{padding:5px 14px;font-size:.79rem;border-bottom:1px solid #eef2f1;background:#fff;}
+  tbody td:not(:first-child){text-align:center;font-weight:600;}
+  tbody tr.hc td{background:var(--rg);}
+  .tr td{background:var(--to)!important;font-weight:700;font-size:.81rem;border-top:2px solid #e8d5a0;}
+  .zv{color:#ccc;font-weight:400!important;}
+  .nc{color:var(--dg);}
+  .ccb{display:block;width:100%;padding:5px 14px;background:var(--tll);border:none;border-top:1px solid var(--tlm);font-size:.74rem;color:var(--tl);cursor:pointer;font-weight:600;text-align:right;}
+  .ccb:hover{background:var(--tlm);}
+  .toast{position:fixed;bottom:22px;right:22px;background:var(--dg);color:#fff;padding:10px 18px;border-radius:8px;font-size:.82rem;font-weight:600;opacity:0;transform:translateY(7px);transition:all .2s;pointer-events:none;z-index:999;}
+  .toast.show{opacity:1;transform:translateY(0);}
+  @media(max-width:600px){header{padding:11px 12px;}main{padding:12px 10px 40px;}.upload-zone{flex-direction:column;padding:16px;}.browse-btn{margin:0;}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌿 Raleigh International — Sales Tracker</h1>
+  <span id="last-updated">No file loaded</span>
+</header>
+<main>
+
+  <!-- UPLOAD -->
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('fi').click()">
+    <div class="icon">📊</div>
+    <div>
+      <h2>Upload passenger registry to update numbers</h2>
+      <p>Drop your .xlsx file here · 2026 & 2027 · 2 & 3 week venturers silently excluded</p>
+    </div>
+    <button class="browse-btn" onclick="event.stopPropagation();document.getElementById('fi').click()">Browse file</button>
+    <input type="file" id="fi" accept=".xlsx" onchange="handleFile(this.files[0])">
+  </div>
+
+  <div class="sbar" id="sbar"></div>
+  <div class="dbox" id="dbox"><h3>⚠️ Data discrepancies found — please check these rows in your source file</h3><div id="dlist"></div></div>
+
+  <!-- NATIONALS -->
+  <div class="panel">
+    <div class="ph" id="nph" onclick="tog('nph','npb')"><h3>✏️ Nationals — click to edit</h3><span class="ti">▼</span></div>
+    <div class="pb" id="npb">
+      <p style="font-size:.78rem;color:var(--tm);margin-bottom:10px">Nationals are subtracted from venturer counts to give the Net figure. Changes save automatically.</p>
+      <div class="ng" id="ng"></div>
+      <div class="anr">
+        <span style="font-size:.78rem;font-weight:600;color:var(--tm)">Add national:</span>
+        <select id="a-yr"><option>2026</option><option>2027</option></select>
+        <select id="a-cy"><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option></select>
+        <select id="a-de"><option>Costa Rica</option><option>South Africa</option><option>Borneo</option></select>
+        <select id="a-wt"><option value="10w">10 Weeks</option><option value="7A">7A</option><option value="7B">7B</option><option value="5A">5A</option><option value="5B">5B</option><option value="4A">4A</option><option value="4B">4B</option></select>
+        <input type="number" id="a-cnt" value="1" min="0" style="width:52px">
+        <button class="btn btn-tl btn-sm" onclick="addNat()">+ Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATE EDITOR -->
+  <div class="panel">
+    <div class="ph" id="deph" onclick="tog('deph','depb')"><h3>📅 Edit Expedition Dates — click to update cycle boundaries</h3><span class="ti">▼</span></div>
+    <div class="pb" id="depb">
+      <p style="font-size:.78rem;color:var(--tm);margin-bottom:10px">Update these if expedition dates change. Changes apply immediately to counting and display. Saved automatically.</p>
+      <div class="de-filter">
+        <select id="de-yr" onchange="renderDateEditor()"><option value="2026">2026</option><option value="2027">2027</option></select>
+        <select id="de-cy" onchange="renderDateEditor()"><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option></select>
+        <select id="de-de" onchange="renderDateEditor()"><option value="all">All destinations</option><option>Costa Rica</option><option>South Africa</option><option>Borneo</option></select>
+      </div>
+      <div class="de-grid" id="de-grid"></div>
+      <button class="btn btn-tl btn-sm" onclick="resetDates()">↩ Reset to original dates</button>
+    </div>
+  </div>
+
+  <!-- TABS + ACTIONS -->
+  <div class="ytabs">
+    <button class="ytab active" onclick="switchYear(2026,this)">2026</button>
+    <button class="ytab" onclick="switchYear(2027,this)">2027</button>
+  </div>
+  <div class="abar">
+    <button class="btn btn-tl" onclick="dlExcel()">⬇ Download Excel</button>
+    <button class="btn btn-ol" onclick="copyAll()">📋 Copy year to clipboard</button>
+    <span class="stext" id="stext">Upload a file to see totals</span>
+  </div>
+  <div id="r2026" class="rs"></div>
+  <div id="r2027" class="rs" style="display:none"></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── DEFAULT DATES ────────────────────────────────────────────────────────────
+const DEFAULT_CB = {
+  2026:{
+    1:{CR:{'10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260317]},SA:{'10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260318]},BN:{'10w':[20260210,20260417],'7A':[20260210,20260328],'7B':[20260302,20260417],'5A':[20260210,20260317]}},
+    2:{CR:{'10w':[20260629,20260903],'7A':[20260629,20260814],'7B':[20260719,20260903],'5A':[20260629,20260803],'5B':[20260719,20260823],'4A':[20260629,20260724],'4B':[20260719,20260814]},SA:{'10w':[20260629,20260903],'7A':[20260629,20260814],'7B':[20260719,20260903],'5A':[20260629,20260803],'5B':[20260719,20260824],'4A':[20260629,20260724],'4B':[20260719,20260814]}},
+    3:{CR:{'10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261117],'4A':[20261013,20261109]},SA:{'10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261118],'4A':[20261013,20261107]},BN:{'10w':[20261013,20261218],'7A':[20261013,20261128],'7B':[20261102,20261218],'5A':[20261013,20261119],'4A':[20261013,20261107]}},
+  },
+  2027:{
+    1:{CR:{'10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270315],'4A':[20270208,20270307]},SA:{'10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270316],'4A':[20270208,20270305]},BN:{'10w':[20270208,20270415],'7A':[20270208,20270326],'7B':[20270228,20270415],'5A':[20270208,20270315],'4A':[20270208,20270305]}},
+    2:{CR:{'10w':[20270628,20270902],'7A':[20270628,20270813],'7B':[20270718,20270902],'5A':[20270628,20270802],'5B':[20270718,20270823],'4A':[20270628,20270725],'4B':[20270718,20270813]},SA:{'10w':[20270628,20270902],'7A':[20270628,20270813],'7B':[20270718,20270902],'5A':[20270628,20270803],'5B':[20270718,20270824],'4A':[20270628,20270723],'4B':[20270718,20270813]}},
+    3:{CR:{'10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271116],'4A':[20271012,20271108]},SA:{'10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271117],'4A':[20271012,20271106]},BN:{'10w':[20271012,20271217],'7A':[20271012,20271127],'7B':[20271101,20271217],'5A':[20271012,20271116],'4A':[20271012,20271106]}},
+  }
+};
+
+// Dest key mapping
+const DK = {'Costa Rica':'CR','South Africa':'SA','Borneo':'BN'};
+const KD = {'CR':'Costa Rica','SA':'South Africa','BN':'Borneo'};
+const DEST_ORDER = ['Costa Rica','South Africa','Borneo'];
+const WTC={'2026|1':['10w','7A','7B','5A'],'2026|2':['10w','7A','7B','5A','5B','4A','4B'],'2026|3':['10w','7A','7B','5A','4A'],'2027|1':['10w','7A','7B','5A','4A'],'2027|2':['10w','7A','7B','5A','5B','4A','4B'],'2027|3':['10w','7A','7B','5A','4A']};
+const LM={'10w':'10 Weeks','7A':'7 Weeks – A','7B':'7 Weeks – B','5A':'5 Weeks – A','5B':'5 Weeks – B','4A':'4 Weeks – A','4B':'4 Weeks – B'};
+const CL={1:'Cycle 1 — February to April',2:'Cycle 2 — June to September',3:'Cycle 3 — October to December'};
+const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ─── PERSISTENT STATE (localStorage) ─────────────────────────────────────────
+function ls(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify(v));}catch(e){return null;}}
+
+let NATIONALS = ls('raleigh_nationals') || {'2026|1|Borneo|10w':1,'2026|1|Borneo|5A':1,'2026|1|South Africa|10w':2,'2026|1|Costa Rica|10w':3,'2026|2|Costa Rica|10w':1};
+let CB = ls('raleigh_cb') || JSON.parse(JSON.stringify(DEFAULT_CB));
+let currentCounts = ls('raleigh_counts') || {};
+let activeYear=2026;
+
+function saveState(){ls('raleigh_nationals',NATIONALS);ls('raleigh_cb',CB);ls('raleigh_counts',currentCounts);}
+
+// ─── DATE UTILS ───────────────────────────────────────────────────────────────
+function parseDate(val){
+  if(val===null||val===undefined||val==='') return null;
+  if(val instanceof Date){if(isNaN(val.getTime()))return null;return{year:val.getUTCFullYear(),month:val.getUTCMonth()+1,day:val.getUTCDate()};}
+  if(typeof val==='number'){if(val<1||val>100000)return null;const ms=(val-25569)*86400000;const d=new Date(ms);return{year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate()};}
+  if(typeof val==='string'){
+    const iso=val.match(/^(\d{4})-(\d{2})-(\d{2})/);if(iso)return{year:+iso[1],month:+iso[2],day:+iso[3]};
+    const pts=val.split('/');
+    if(pts.length===3&&pts[2].length===4){const d=+pts[0],m=+pts[1],y=+pts[2];if(d>=1&&d<=31&&m>=1&&m<=12&&y>2000)return{year:y,month:m,day:d};}
+    const num=parseFloat(val);if(!isNaN(num)&&num>1000){const ms=(num-25569)*86400000;const d=new Date(ms);return{year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate()};}
+  }
+  return null;
+}
+function ymdN(y){return y?y.year*10000+y.month*100+y.day:0;}
+function nStr(n){const y=Math.floor(n/10000),m=Math.floor((n%10000)/100),d=n%100;return`${String(d).padStart(2,'0')} ${MNS[m-1]} ${y}`;}
+function ymdS(y){return y?`${String(y.day).padStart(2,'0')} ${MNS[y.month-1]} ${y.year}`:'?';}
+function numToDateInput(n){const y=Math.floor(n/10000),m=String(Math.floor((n%10000)/100)).padStart(2,'0'),d=String(n%100).padStart(2,'0');return`${y}-${m}-${d}`;}
+function dateInputToNum(s){const p=s.split('-');return +p[0]*10000+ +p[1]*100+ +p[2];}
+
+// ─── WEEK TYPE ────────────────────────────────────────────────────────────────
+function identifyWT(sN,eN,year,cycle,dest){
+  const dk=DK[dest];if(!dk)return null;
+  const bounds=((CB[year]||{})[cycle]||{})[dk];if(!bounds)return null;
+  // Exact match only — no tolerance, no fallback
+  for(const[wt,[s,e]] of Object.entries(bounds)){if(sN===s&&eN===e)return wt;}
+  return null;
+}
+
+// ─── FILE HANDLER ─────────────────────────────────────────────────────────────
+function handleFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const data=XLSX.utils.sheet_to_json(ws,{raw:false,cellDates:true,defval:''});
+      if(!data.length){showS('No data found.','error');return;}
+      const cols=Object.keys(data[0]);
+      const fc=keys=>cols.find(c=>keys.some(k=>c.toLowerCase().includes(k.toLowerCase())))||null;
+      const PC=fc(['Product_Name']),SC=fc(['Grouping_SKU']),DC=fc(['Destination_Name']),STC=fc(['Date_Start']),ENC=fc(['Date_End']);
+      if(!STC||!ENC){showS('Cannot find date columns.','error');return;}
+      const rows=data.map(r=>({product:String(r[PC]||''),sku:String(r[SC]||''),dest:String(r[DC]||''),startYMD:parseDate(r[STC]),endYMD:parseDate(r[ENC])}));
+      const counts={};
+      rows.forEach(row=>{
+        const s=row.startYMD,en=row.endYMD;
+        if(!s||!en)return;
+        const yr=s.year;if(yr!==2026&&yr!==2027)return;
+        if(!row.dest)return;
+        const sDate=new Date(Date.UTC(s.year,s.month-1,s.day));
+        const eDate=new Date(Date.UTC(en.year,en.month-1,en.day));
+        const days=Math.round((eDate-sDate)/86400000);
+        if(days<24)return; // silently ignore short duration
+        // Silently ignore if product name says 2 or 3 weeks — not true bookings
+        if(/\b[23]\s*w(ee)?k/i.test(row.product))return;
+        const m=s.month,cycle=m<=5?1:m<=9?2:3;
+        const wt=identifyWT(ymdN(s),ymdN(en),yr,cycle,row.dest);
+        if(!wt)return;
+        const key=`${yr}|${cycle}|${row.dest}|${wt}`;
+        counts[key]=(counts[key]||0)+1;
+      });
+      currentCounts=counts;
+      const issues=checkDisc(rows);
+      showDisc(issues);
+      const total=Object.values(counts).reduce((a,b)=>a+b,0);
+      const y26=rows.filter(r=>r.startYMD?.year===2026).length;
+      const y27=rows.filter(r=>r.startYMD?.year===2027).length;
+      showS(`✅ ${data.length} rows processed — ${total} venturers counted (${y26} in 2026, ${y27} in 2027)${issues.length?` · ⚠️ ${issues.length} discrepancies`:''}`, 'ok');
+      const now=new Date();
+      const lu=`Updated: ${now.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} ${now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+      document.getElementById('last-updated').textContent=lu;
+      ls('raleigh_lastUpdated',lu);
+      saveState();
+      renderAll();
+    }catch(err){showS('Error: '+err.message,'error');console.error(err);}
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ─── DISCREPANCIES ────────────────────────────────────────────────────────────
+function checkDisc(rows){
+  const issues=[];
+  rows.forEach((row,i)=>{
+    // Silently skip 2/3 week product names — not true bookings, never flag
+    if(/\b[23]\s*w(ee)?k/i.test(row.product))return;
+    if(!row.startYMD)return;
+    const probs=[],name=row.product,dest=row.dest,yr=row.startYMD.year,m=row.startYMD.month,cycle=m<=5?1:m<=9?2:3;
+    const lyM=name.match(/20(2[4-9])/);const lY=lyM?parseInt('20'+lyM[1]):null;
+    const skM=row.sku.match(/Cycle\s*(\d)/i);const lC=skM?parseInt(skM[1]):null;
+    if(lC&&lC!==cycle)probs.push(`Cycle mismatch — name says C${lC}, start date says C${cycle}`);
+    if(lY&&lY!==yr)probs.push(`Year mismatch — name says ${lY}, start date says ${yr}`);
+    if(dest.toLowerCase().includes('borneo')&&cycle===2)probs.push('Borneo has no Cycle 2 — start date falls in Jun–Sep');
+    let din='';
+    if(name.toLowerCase().includes('costa rica'))din='Costa Rica';
+    else if(name.toLowerCase().includes('south africa'))din='South Africa';
+    else if(name.toLowerCase().includes('borneo'))din='Borneo';
+    if(din&&din!==dest)probs.push(`Destination mismatch — name says '${din}', field says '${dest}'`);
+    // Flag rows with valid dest/year but dates don't match any known week type exactly
+    if(!probs.length&&row.startYMD&&row.endYMD){
+      const yr2=row.startYMD.year,m2=row.startYMD.month,cycle2=m2<=5?1:m2<=9?2:3;
+      if((yr2===2026||yr2===2027)&&dest){
+        const sDate=new Date(Date.UTC(row.startYMD.year,row.startYMD.month-1,row.startYMD.day));
+        const eDate=new Date(Date.UTC(row.endYMD.year,row.endYMD.month-1,row.endYMD.day));
+        const days=Math.round((eDate-sDate)/86400000);
+        if(days>=24){
+          const wt=identifyWT(ymdN(row.startYMD),ymdN(row.endYMD),yr2,cycle2,dest);
+          if(!wt)probs.push(`Dates don't match any known week type exactly — ${ymdS(row.startYMD)} to ${ymdS(row.endYMD)} (${days} days). Check expedition dates or update the Date Editor.`);
+        }
+      }
+    }
+    if(probs.length)issues.push({rowNum:i+2,product:name,dest,startStr:ymdS(row.startYMD),probs});
+  });
+  return issues;
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderAll(){renderYear(2026);renderYear(2027);updateSum();}
+
+function renderYear(year){
+  const c=document.getElementById(`r${year}`);c.innerHTML='';
+  for(let cy=1;cy<=3;cy++){
+    const dests=DEST_ORDER.filter(d=>((CB[year]||{})[cy]||{})[DK[d]]);
+    if(!dests.length)continue;
+    const blk=document.createElement('div');
+    const ch=document.createElement('div');ch.className='ch';ch.textContent=CL[cy];blk.appendChild(ch);
+    dests.forEach(dest=>{
+      const dk=DK[dest];
+      const wtList=(WTC[`${year}|${cy}`]||[]).filter(w=>((CB[year][cy][dk])||{})[w]);
+      if(!wtList.length)return;
+      const dh=document.createElement('div');dh.className='dh';dh.textContent=dest;blk.appendChild(dh);
+      const tbl=document.createElement('table');
+      tbl.innerHTML='<thead><tr><th>Week Type</th><th>Dates</th><th>Venturers</th><th>Nationals</th><th>Net</th></tr></thead>';
+      const tb=document.createElement('tbody');
+      let sv=0,sn=0;
+      wtList.forEach(wt=>{
+        const b=CB[year][cy][dk][wt],key=`${year}|${cy}|${dest}|${wt}`;
+        const cnt=currentCounts[key]||0,nat=NATIONALS[key]||0,net=cnt-nat;
+        sv+=cnt;sn+=nat;
+        const tr=document.createElement('tr');if(cnt>0)tr.classList.add('hc');
+        tr.innerHTML=`<td>${LM[wt]||wt}</td><td style="color:var(--tm);font-weight:400">${nStr(b[0])} – ${nStr(b[1])}</td><td class="${cnt===0?'zv':''}">${cnt}</td><td class="${nat===0?'zv':''}">${nat}</td><td class="nc">${net}</td>`;
+        tb.appendChild(tr);
+      });
+      const tr=document.createElement('tr');tr.className='tr';
+      tr.innerHTML=`<td>TOTAL – ${dest}</td><td></td><td>${sv}</td><td>${sn}</td><td class="nc">${sv-sn}</td>`;
+      tb.appendChild(tr);tbl.appendChild(tb);blk.appendChild(tbl);
+      // Copy button per destination — Net values only
+      const dcb=document.createElement('button');dcb.className='ccb';
+      dcb.textContent=`📋 Copy ${dest} Net values to clipboard`;
+      const _year=year,_cy=cy,_dest=dest,_dk=dk,_wtList=wtList;
+      dcb.onclick=()=>copyDestNet(_year,_cy,_dest,_dk,_wtList);
+      blk.appendChild(dcb);
+    });
+    c.appendChild(blk);
+  }
+}
+
+function updateSum(){
+  if(!Object.keys(currentCounts).length){document.getElementById('stext').textContent='Upload a file to see totals';return;}
+  const t26=Object.entries(currentCounts).filter(([k])=>k.startsWith('2026')).reduce((a,[,v])=>a+v,0);
+  const t27=Object.entries(currentCounts).filter(([k])=>k.startsWith('2027')).reduce((a,[,v])=>a+v,0);
+  document.getElementById('stext').textContent=`2026: ${t26} · 2027: ${t27} · Total: ${t26+t27}`;
+}
+
+function switchYear(year,el){
+  activeYear=year;
+  document.querySelectorAll('.ytab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+  document.getElementById('r2026').style.display=year===2026?'block':'none';
+  document.getElementById('r2027').style.display=year===2027?'block':'none';
+}
+
+// ─── NATIONALS ────────────────────────────────────────────────────────────────
+function renderNats(){
+  const g=document.getElementById('ng');g.innerHTML='';
+  const es=Object.entries(NATIONALS);
+  if(!es.length){g.innerHTML='<p style="font-size:.78rem;color:var(--tt)">No nationals set.</p>';return;}
+  es.forEach(([key,val])=>{
+    const[yr,cy,dest,wt]=key.split('|');
+    const r=document.createElement('div');r.className='nr';
+    r.innerHTML=`<label>${yr} · C${cy} · ${dest} · ${LM[wt]||wt}</label><input type="number" min="0" value="${val}" onchange="updNat('${key}',this.value)"><button class="db" onclick="delNat('${key}')">✕</button>`;
+    g.appendChild(r);
+  });
+}
+function updNat(k,v){NATIONALS[k]=parseInt(v)||0;saveState();renderAll();}
+function delNat(k){delete NATIONALS[k];saveState();renderNats();renderAll();}
+function addNat(){
+  const k=`${document.getElementById('a-yr').value}|${document.getElementById('a-cy').value}|${document.getElementById('a-de').value}|${document.getElementById('a-wt').value}`;
+  NATIONALS[k]=parseInt(document.getElementById('a-cnt').value)||0;
+  saveState();renderNats();renderAll();toast('National added ✓');
+}
+
+// ─── DATE EDITOR ──────────────────────────────────────────────────────────────
+function renderDateEditor(){
+  const yr=+document.getElementById('de-yr').value;
+  const cy=+document.getElementById('de-cy').value;
+  const de=document.getElementById('de-de').value;
+  const grid=document.getElementById('de-grid');
+  grid.innerHTML='';
+  const dests=de==='all'?DEST_ORDER:[de];
+  dests.forEach(dest=>{
+    const dk=DK[dest];
+    const bounds=((CB[yr]||{})[cy]||{})[dk];
+    if(!bounds)return;
+    const wtList=(WTC[`${yr}|${cy}`]||[]).filter(w=>bounds[w]);
+    wtList.forEach(wt=>{
+      const[s,e]=bounds[wt];
+      const row=document.createElement('div');row.className='de-row';
+      row.innerHTML=`<label>${dest} · ${LM[wt]||wt}</label>
+        <div class="de-inputs">
+          <input type="date" value="${numToDateInput(s)}" onchange="updateDate(${yr},${cy},'${dk}','${wt}',0,this.value)">
+          <span>→</span>
+          <input type="date" value="${numToDateInput(e)}" onchange="updateDate(${yr},${cy},'${dk}','${wt}',1,this.value)">
+        </div>`;
+      grid.appendChild(row);
+    });
+  });
+}
+
+function updateDate(yr,cy,dk,wt,idx,val){
+  if(!val)return;
+  const n=dateInputToNum(val);
+  CB[yr][cy][dk][wt][idx]=n;
+  saveState();renderAll();toast('Date updated ✓');
+}
+
+function resetDates(){
+  CB=JSON.parse(JSON.stringify(DEFAULT_CB));
+  saveState();renderDateEditor();renderAll();toast('Dates reset to defaults ✓');
+}
+
+// ─── COPY & DOWNLOAD ──────────────────────────────────────────────────────────
+function copyDestNet(year,cy,dest,dk,wtList){
+  const lines=[];
+  wtList.forEach(wt=>{
+    const k=`${year}|${cy}|${dest}|${wt}`;
+    const cnt=currentCounts[k]||0,nat=NATIONALS[k]||0;
+    lines.push(cnt-nat);
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast(`${dest} Net values copied!`));
+}
+
+function tableToText(year,cycle){
+  const dests=DEST_ORDER.filter(d=>((CB[year]||{})[cycle]||{})[DK[d]]);
+  const lines=[`${CL[cycle]} — ${year}`,'']; 
+  dests.forEach(dest=>{
+    const dk=DK[dest];
+    const wtList=(WTC[`${year}|${cycle}`]||[]).filter(w=>((CB[year][cycle][dk])||{})[w]);
+    if(!wtList.length)return;
+    lines.push(dest,['Week Type','Dates','Venturers','Nationals','Net'].join('\t'));
+    let sv=0,sn=0;
+    wtList.forEach(wt=>{
+      const b=CB[year][cycle][dk][wt],k=`${year}|${cycle}|${dest}|${wt}`;
+      const cnt=currentCounts[k]||0,nat=NATIONALS[k]||0;sv+=cnt;sn+=nat;
+      lines.push([LM[wt]||wt,`${nStr(b[0])} – ${nStr(b[1])}`,cnt,nat,cnt-nat].join('\t'));
+    });
+    lines.push([`TOTAL – ${dest}`,'',sv,sn,sv-sn].join('\t'),'');
+  });
+  return lines.join('\n');
+}
+function copyBlock(year,cycle){navigator.clipboard.writeText(tableToText(year,cycle)).then(()=>toast('Copied — paste into Excel!'));}
+function copyAll(){let t=`RALEIGH INTERNATIONAL — ${activeYear} VENTURER SALES SUMMARY\n\n`;for(let c=1;c<=3;c++)t+=tableToText(activeYear,c)+'\n';navigator.clipboard.writeText(t).then(()=>toast('Full year copied!'));}
+function dlExcel(){
+  const year=activeYear;
+  const rows=[['RALEIGH INTERNATIONAL — '+year+' VENTURER SALES SUMMARY'],['Updated: '+new Date().toLocaleDateString('en-GB')],[]];
+  for(let cy=1;cy<=3;cy++){
+    const dests=DEST_ORDER.filter(d=>((CB[year]||{})[cy]||{})[DK[d]]);if(!dests.length)continue;
+    rows.push([CL[cy]],[]);
+    dests.forEach(dest=>{
+      const dk=DK[dest];
+      const wtList=(WTC[`${year}|${cy}`]||[]).filter(w=>((CB[year][cy][dk])||{})[w]);if(!wtList.length)return;
+      rows.push([dest],['Week Type','Dates','Venturers','Nationals','Net']);
+      let sv=0,sn=0;
+      wtList.forEach(wt=>{const b=CB[year][cy][dk][wt],k=`${year}|${cy}|${dest}|${wt}`;const cnt=currentCounts[k]||0,nat=NATIONALS[k]||0;sv+=cnt;sn+=nat;rows.push([LM[wt]||wt,`${nStr(b[0])} – ${nStr(b[1])}`,cnt,nat,cnt-nat]);});
+      rows.push([`TOTAL – ${dest}`,'',sv,sn,sv-sn],[]);
+    });
+  }
+  const wbOut=XLSX.utils.book_new(),wsh=XLSX.utils.aoa_to_sheet(rows);
+  wsh['!cols']=[{wch:22},{wch:28},{wch:12},{wch:12},{wch:10}];
+  XLSX.utils.book_append_sheet(wbOut,wsh,`${year} Summary`);
+  XLSX.writeFile(wbOut,`Raleigh_Sales_${year}.xlsx`);
+  toast('Excel downloaded!');
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function tog(hid,bid){document.getElementById(hid).classList.toggle('open');document.getElementById(bid).classList.toggle('open');}
+function showS(msg,type){const b=document.getElementById('sbar');b.textContent=msg;b.className='sbar show'+(type?' '+type:'');}
+function showDisc(issues){
+  const box=document.getElementById('dbox'),list=document.getElementById('dlist');
+  if(!issues.length){box.classList.remove('show');return;}
+  box.classList.add('show');
+  list.innerHTML=issues.map(i=>`<div class="di"><strong>Row ${i.rowNum}: ${i.product} · ${i.dest} · ${i.startStr}</strong>${i.probs.map(p=>`⚠ ${p}`).join('<br>')}</div>`).join('');
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+
+// Drag & drop
+const zone=document.getElementById('upload-zone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.style.background='var(--tll)';});
+zone.addEventListener('dragleave',()=>{zone.style.background='';});
+zone.addEventListener('drop',e=>{e.preventDefault();zone.style.background='';const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+// Restore last-updated label
+const lu=ls('raleigh_lastUpdated');if(lu)document.getElementById('last-updated').textContent=lu;
+
+renderNats();
+renderDateEditor();
+renderAll();
+
+// Show summary if we have stored counts
+if(Object.keys(currentCounts).length){
+  updateSum();
+  const total=Object.values(currentCounts).reduce((a,b)=>a+b,0);
+  showS(`✅ Showing last uploaded data — ${total} venturers. Upload a new file to refresh.`,'ok');
+}
+</script>
+</body>
+</html>
